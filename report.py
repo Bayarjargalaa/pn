@@ -4,10 +4,8 @@ import pandas as pd
 st.set_page_config(page_title="Сар бүрийн ашиг алдагдлын тайлан", layout="centered")
 st.title("📊 Сар бүрийн ашиг алдагдлын тайлан")
 df= pd.read_excel("ЕЖ.xlsx")
-# 📂 Гүйлгээний файл байршуулах
-# uploaded_file = st.file_uploader("Ерөнхий журналын Excel файл оруулна уу", type=["xlsx"])
 
-
+print(df.columns)
 
 # 🧹 Бэлтгэх
 df['Огноо'] = pd.to_datetime(df['сар, өдөр'])
@@ -15,43 +13,142 @@ df['Огноо'] = pd.to_datetime(df['сар, өдөр'])
 
 
 # Данс болон дүнг нэг багана болгон нэгтгэх
-debet_df = df[["Огноо", "Дебет", "Дүн"]].rename(columns={"Дебет": "Данс код"})
-# credit_df = df[["Огноо", "Кредит", "Дүн"]].rename(columns={"Кредит": "Данс код"})
+all_debet_df = df[["Огноо", "Дебет", "Дүн"]].rename(columns={"Дебет": "Данс код"})
+all_credit_df = df[["Огноо", "Кредит\n", "Дүн"]].rename(columns={"Кредит\n": "Данс код"})
 
-# Данс код + Огноогоор нэгтгэхэд бэлдэх
-all_df = pd.concat([debet_df,], ignore_index=True)
+
 
 # Сарын формат гаргах (хүсвэл)
-all_df["Сар"] = all_df["Огноо"].dt.to_period("M")
+all_debet_df["Сар"] = all_debet_df["Огноо"].dt.to_period("M")
+all_credit_df["Сар"] = all_credit_df["Огноо"].dt.to_period("M")
 
 # Нийлбэрийг гаргах
-pivot = all_df.groupby(["Сар", "Данс код"])["Дүн"].sum().reset_index()
+# pivot = all_df.groupby(["Данс код"])["Дүн"].sum().reset_index()
+pivot_debit = all_debet_df.pivot_table(
+    index="Данс код", 
+    columns="Сар", 
+    values="Дүн", 
+    aggfunc="sum", 
+    fill_value=0
+)
+numeric_cols = pivot_debit.select_dtypes(include=['number']).columns
+pivot_debit[numeric_cols] = pivot_debit[numeric_cols].astype(float)
+
+pivot_credit = all_credit_df.pivot_table(
+    index="Данс код", 
+    columns="Сар", 
+    values="Дүн", 
+    aggfunc="sum", 
+    fill_value=0
+)
+numeric_cols = pivot_credit.select_dtypes(include=['number']).columns
+pivot_credit[numeric_cols] = pivot_credit[numeric_cols].astype(float)
 
 
-# # 🎯 Дансны кодоос ангилал тодорхойлох
-# def classify(account_code):
-#     if account_code.startswith("5101"):
-#         return "Орлого"
-#     elif account_code.startswith("6101"):
-#         return "Өртөг"
-#     elif account_code.startswith("70") or account_code.startswith("71"):
-#         return "Үйл ажиллагааны зардал"
-#     else:
-#         return "Бусад"
 
-# df['Ангилал'] = df['Данс код'].apply(classify)
-
-# # 💵 Дүн тооцох
-# df['Дүн'] = df.apply(lambda x: x['Кредит'] if x['Ангилал'] == "Орлого" else x['Дебет'], axis=1)
-
-# # 📊 Pivot Table үүсгэх
-# pivot = df.groupby(['Сар', 'Ангилал'])['Дүн'].sum().unstack(fill_value=0)
-# pivot['Цэвэр ашиг'] = pivot.get('Орлого', 0) - pivot.get('Өртөг', 0) - pivot.get('Үйл ажиллагааны зардал', 0) - pivot.get('Санхүүгийн зардал', 0)
-print(pivot)
 
 # 📈 Хүснэгт харуулах
-st.subheader("Сар бүрийн ашиг алдагдлын хүснэгт")
-st.dataframe(pivot)
+# st.subheader("Сар бүрийн дебет дүн")
+# st.dataframe(pivot)
+# st.dataframe(pivot_debit.style.format("{:,.2f}"))
+
+# 📈 Хүснэгт харуулах
+# st.subheader("Сар бүрийн кредит дүн")
+# st.dataframe(pivot)
+# st.dataframe(pivot_credit.style.format("{:,.2f}"))
+
+rows_5101  = pivot_credit.loc[pivot_credit.index.astype(str).str.startswith('5101')]
+rows_6101  = pivot_debit.loc[pivot_debit.index.astype(str).str.startswith('6101')]
+# rows_1501  = pivot_debit.loc[pivot_debit.index.astype(str).str.startswith('1501')]
+rows_70  = pivot_debit.loc[pivot_debit.index.astype(str).str.startswith('70')]
+rows_71  = pivot_debit.loc[pivot_debit.index.astype(str).str.startswith('71')]
+rows_87  = pivot_debit.loc[pivot_debit.index.astype(str).str.startswith('87')]
+rows_88  = pivot_debit.loc[pivot_debit.index.astype(str).str.startswith('88')]
+rows_91  = pivot_debit.loc[pivot_debit.index.astype(str).str.startswith('91')]
+
+merged_rows = pd.concat([rows_5101, rows_6101,  ], axis=0)
+
+# Сар багануудаар ялган, ялгасны дараа хоорондын зөрүүг тооцох
+gross_profit = rows_5101.sum(numeric_only=True) - rows_6101.sum(numeric_only=True)
+merged_rows.loc['Бохир ашиг'] = gross_profit
+
+row_70_total = pd.DataFrame(rows_70.sum(numeric_only=True)).T
+row_70_total.index = ['70_Зардлын_нийт']
+merged_rows = pd.concat([merged_rows, row_70_total], axis=0)
+
+row_71_total = pd.DataFrame(rows_71.sum(numeric_only=True)).T
+row_71_total.index = ['71_Зардлын_нийт']
+merged_rows = pd.concat([merged_rows, row_71_total], axis=0)
+
+row_87_total = pd.DataFrame(rows_87.sum(numeric_only=True)).T
+row_87_total.index = ['87_Зардлын_нийт']
+merged_rows = pd.concat([merged_rows, row_87_total], axis=0)
+
+row_88_total = pd.DataFrame(rows_88.sum(numeric_only=True)).T
+row_88_total.index = ['88_Зардлын_нийт']
+merged_rows = pd.concat([merged_rows, row_88_total], axis=0)
+
+row_91_total = pd.DataFrame(rows_91.sum(numeric_only=True)).T
+row_91_total.index = ['91_Зардлын_нийт']
+merged_rows = pd.concat([merged_rows, row_91_total], axis=0)
+
+rows_all_expense = pivot_debit.loc[
+    pivot_debit.index.astype(str).str.startswith(('70', '71', '87', '88', '91'))
+]
+
+
+
+row_total_expense = pd.DataFrame(rows_all_expense.sum(numeric_only=True)).T
+row_total_expense.index = ['Нийт зардал (70+71+87+88+91)']
+
+net_profit = gross_profit - row_total_expense.loc['Нийт зардал (70+71+87+88+91)']
+net_profit = pd.DataFrame(net_profit).T 
+net_profit.index = ['Цэвэр ашиг /-/ бол алдагдал']
+# merged_rows.loc['Цэвэр ашиг'] = net_profit
+
+merged_rows = pd.concat([merged_rows, row_total_expense], axis=0)
+
+merged_rows = pd.concat([merged_rows, net_profit], axis=0)
+
+st.dataframe(merged_rows.style.format("{:,.2f}"), use_container_width=True)
 
 # 📉 График
 # st.line_chart(pivot['Цэвэр ашиг'])
+
+
+st.subheader("Сар бүрийн зардлын тайлан (70, 71, 87, 88, 91)")
+st.dataframe(rows_all_expense.style.format("{:,.2f}"), use_container_width=True)
+
+
+
+# selected_month = st.selectbox("Сар сонгох:", numeric_cols)
+# # 📌 Сонгосон сарын мэдээллийг харуулах
+# st.dataframe(
+#     rows_all_expense[[selected_month]].style.format("{:,.2f}"),
+#     use_container_width=True
+# )
+
+df.columns = df.columns.astype(str)
+selected_month = st.selectbox(
+    "Сар сонгох:", 
+    numeric_cols,
+    key="sar_songolt"
+)
+
+# 👉 Сонгосон сарын нэг баганын датафрейм
+selected_data = rows_all_expense[[selected_month]].copy()
+
+# 👉 Нийт зардал (нийт нийлбэр)
+total = selected_data[selected_month].sum()
+
+# 👉 Хувь тооцох багана
+selected_data["Хувь (%)"] = (selected_data[selected_month] / total * 100)
+
+# 👉 Streamlit-д форматлаж харуулах
+st.dataframe(
+    selected_data.style.format({
+        selected_month: "{:,.2f}",
+        "Хувь (%)": "{:.2f}%"
+    }),
+    use_container_width=True
+)
