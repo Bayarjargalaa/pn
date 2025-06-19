@@ -152,3 +152,32 @@ st.dataframe(
     }),
     use_container_width=True
 )
+import pandas as pd
+import streamlit as st
+
+# 📌 5101 дүнг Кредит талд агуулсан гүйлгээнүүдийг шүүх
+sales_entries = df[df["Кредит\n"].astype(str).str.startswith("5101")].copy()
+
+# 🗓️ Огноог datetime болгож, сараар бүлэглэхэд ашиглах багана үүсгэх
+sales_entries["Огноо"] = pd.to_datetime(sales_entries["Огноо"], errors='coerce')
+sales_entries["Сар"] = sales_entries["Огноо"].dt.to_period("M")
+
+# 📊 Сараар, Дебет дансаар бүлэглэж дүнг нэгтгэх
+monthly_sales = sales_entries.groupby(["Сар", "Дебет"])["Дүн"].sum().reset_index()
+
+# 📌 Pivot хүснэгт үүсгэх: мөр - Дебет данс, багана - Сар
+pivot_monthly_sales = monthly_sales.pivot(index="Дебет", columns="Сар", values="Дүн").fillna(0)
+
+# ➕ Нийт мөр нэмэх: Сар тус бүрийн нийлбэрийг тооцоолно
+total_row = pivot_monthly_sales.sum(numeric_only=True)
+total_row.name = "Нийт"
+
+# ⬇️ Нийт мөрийг pivot хүснэгтэд нэмэх
+pivot_monthly_sales = pd.concat([pivot_monthly_sales, total_row.to_frame().T])
+
+# 📈 Streamlit дээр харуулах
+st.subheader("📊 Борлуулалтын орлого (5101) сар бүр харьцсан дансуудаар (Нийт дүнтэй)")
+st.dataframe(pivot_monthly_sales.style.format("{:,.2f}"), use_container_width=True)
+
+
+
