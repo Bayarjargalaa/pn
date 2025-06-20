@@ -439,3 +439,4 @@ pivot_credit = pd.concat([pivot_credit, total_row_credit.to_frame().T])
 
 st.subheader("📈 340104 - Урт хугацаат өр үүсэлт (Кредит гүйлгээ, Дебет дансаар)")
 st.dataframe(pivot_credit.style.format("{:,.2f}"), use_container_width=True)
+
