@@ -1,9 +1,20 @@
-import streamlit as st
+
+import os
+from pathlib import Path
 import pandas as pd
+import streamlit as st
+
+
+# 📌 Одоогийн Python скрипт байрлаж буй хавтас
+BASE_DIR = Path(__file__).resolve().parent
+
+# 📌 data хавтас дахь файлын зам
+file_path = BASE_DIR.parent / 'PN'/ "data" / "ЕЖ.xlsx"
+print(f"Файл байрлах зам: {file_path}")
 
 st.set_page_config(page_title="Сар бүрийн ашиг алдагдлын тайлан", layout="centered")
 
-df= pd.read_excel("ЕЖ.xlsx")
+df= pd.read_excel(file_path)
 
 print(df.columns)
 
@@ -14,7 +25,7 @@ df['Огноо'] = pd.to_datetime(df['сар, өдөр'])
 
 # Данс болон дүнг нэг багана болгон нэгтгэх
 all_debet_df = df[["Огноо", "Дебет", "Дүн"]].rename(columns={"Дебет": "Данс код"})
-all_credit_df = df[["Огноо", "Кредит\n", "Дүн"]].rename(columns={"Кредит\n": "Данс код"})
+all_credit_df = df[["Огноо", "Кредит", "Дүн"]].rename(columns={"Кредит": "Данс код"})
 
 
 
@@ -49,13 +60,38 @@ pivot_credit[numeric_cols] = pivot_credit[numeric_cols].astype(float)
 
 # 📈 Хүснэгт харуулах
 st.subheader("Сар бүрийн дебет дүн")
-# st.dataframe(pivot_debit)
 st.dataframe(pivot_debit.style.format("{:,.2f}"))
 
 # 📈 Хүснэгт харуулах
 st.subheader("Сар бүрийн кредит дүн")
-# st.dataframe(pivot)
 st.dataframe(pivot_credit.style.format("{:,.2f}"))
+
+
+
+# ...existing code...
+
+# Сар бүрийн кредит дүн
+st.subheader("Сар бүрийн кредит дүн")
+
+# Багана бүрийн нийлбэр (сар бүрийн нийт кредит дүн)
+col_total = pd.DataFrame(pivot_credit.sum(axis=0)).T
+col_total.index = ['Баганын хөл дүн']
+
+# Мөр бүрийн нийлбэр (данс бүрийн нийт кредит дүн)
+pivot_credit_with_row_total = pivot_credit.copy()
+pivot_credit_with_row_total['Мөрийн хөл дүн'] = pivot_credit_with_row_total.sum(axis=1)
+
+# Баганын хөл дүнг нэмэх
+pivot_credit_with_total = pd.concat([pivot_credit_with_row_total, col_total], axis=0)
+
+# Хэрвээ "Мөрийн хөл дүн" багана баганын нийлбэрт байхгүй бол 0 гэж үзнэ
+if 'Мөрийн хөл дүн' not in col_total.columns:
+    pivot_credit_with_total.loc['Баганын хөл дүн', 'Мөрийн хөл дүн'] = col_total.sum(axis=1).values[0]
+
+st.dataframe(pivot_credit_with_total.style.format("{:,.2f}"), use_container_width=True)
+# ...existing code...
+
+
 
 rows_5101  = pivot_credit.loc[pivot_credit.index.astype(str).str.startswith('5101')]
 rows_6101  = pivot_debit.loc[pivot_debit.index.astype(str).str.startswith('6101')]
@@ -156,7 +192,7 @@ import pandas as pd
 import streamlit as st
 
 # 📌 5101 дүнг Кредит талд агуулсан гүйлгээнүүдийг шүүх
-sales_entries = df[df["Кредит\n"].astype(str).str.startswith("5101")].copy()
+sales_entries = df[df["Кредит"].astype(str).str.startswith("5101")].copy()
 
 # 🗓️ Огноог datetime болгож, сараар бүлэглэхэд ашиглах багана үүсгэх
 sales_entries["Огноо"] = pd.to_datetime(sales_entries["Огноо"], errors='coerce')
@@ -189,10 +225,10 @@ cash_in["Огноо"] = pd.to_datetime(cash_in["Огноо"], errors='coerce')
 cash_in["Сар"] = cash_in["Огноо"].dt.to_period("M")
 
 # 3. Сар, Кредит дансаар бүлэглэн дүнг нэгтгэх
-credit_grouped = cash_in.groupby(["Сар", "Кредит\n"])["Дүн"].sum().reset_index()
+credit_grouped = cash_in.groupby(["Сар", "Кредит"])["Дүн"].sum().reset_index()
 
 # 4. Pivot table: мөр - Кредит данс, багана - Сар
-pivot_cash_in_by_credit = credit_grouped.pivot(index="Кредит\n", columns="Сар", values="Дүн").fillna(0)
+pivot_cash_in_by_credit = credit_grouped.pivot(index="Кредит", columns="Сар", values="Дүн").fillna(0)
 
 
 total_row_cash_in = pivot_cash_in_by_credit.sum(numeric_only=True)
@@ -207,7 +243,7 @@ st.dataframe(pivot_cash_in_by_credit.style.format("{:,.2f}"), use_container_widt
 
 
 # 1. Касс /Дэлгүүр/ данс Кредит талд орсон гүйлгээнүүдийг шүүнэ
-cash_out = df[df["Кредит\n"] == "100101 - Касс дахь мөнгө /Дэлгүүр/"].copy()
+cash_out = df[df["Кредит"] == "100101 - Касс дахь мөнгө /Дэлгүүр/"].copy()
 
 # 2. Огноог datetime болгож, "Сар" багана үүсгэх
 cash_out["Огноо"] = pd.to_datetime(cash_out["Огноо"], errors='coerce')
@@ -234,9 +270,9 @@ cash_in_102 = df[df["Дебет"] == "100102 - Касс дахь мөнгө /Gol
 cash_in_102["Огноо"] = pd.to_datetime(cash_in_102["Огноо"], errors='coerce')
 cash_in_102["Сар"] = cash_in_102["Огноо"].dt.to_period("M")
 
-credit_grouped_102 = cash_in_102.groupby(["Сар", "Кредит\n"])["Дүн"].sum().reset_index()
+credit_grouped_102 = cash_in_102.groupby(["Сар", "Кредит"])["Дүн"].sum().reset_index()
 
-pivot_cash_in_102 = credit_grouped_102.pivot(index="Кредит\n", columns="Сар", values="Дүн").fillna(0)
+pivot_cash_in_102 = credit_grouped_102.pivot(index="Кредит", columns="Сар", values="Дүн").fillna(0)
 
 total_row_in_102 = pivot_cash_in_102.sum(numeric_only=True)
 total_row_in_102.name = "Нийт"
@@ -248,7 +284,7 @@ st.dataframe(pivot_cash_in_102.style.format("{:,.2f}"), use_container_width=True
 
 # 🔶 2. 100102 - Касс /Gold's/ дансны Кредит гарлага гүйлгээ
 
-cash_out_102 = df[df["Кредит\n"] == "100102 - Касс дахь мөнгө /Gold's/"].copy()
+cash_out_102 = df[df["Кредит"] == "100102 - Касс дахь мөнгө /Gold's/"].copy()
 
 cash_out_102["Огноо"] = pd.to_datetime(cash_out_102["Огноо"], errors='coerce')
 cash_out_102["Сар"] = cash_out_102["Огноо"].dt.to_period("M")
@@ -270,8 +306,8 @@ avlaga_debit = df[df["Дебет"] == "120101 - Дансны авлага"].copy
 avlaga_debit["Огноо"] = pd.to_datetime(avlaga_debit["Огноо"], errors='coerce')
 avlaga_debit["Сар"] = avlaga_debit["Огноо"].dt.to_period("M")
 
-debit_grouped = avlaga_debit.groupby(["Сар", "Кредит\n"])["Дүн"].sum().reset_index()
-pivot_debit_avlaga = debit_grouped.pivot(index="Кредит\n", columns="Сар", values="Дүн").fillna(0)
+debit_grouped = avlaga_debit.groupby(["Сар", "Кредит"])["Дүн"].sum().reset_index()
+pivot_debit_avlaga = debit_grouped.pivot(index="Кредит", columns="Сар", values="Дүн").fillna(0)
 
 # Нийт мөр
 total_row_debit = pivot_debit_avlaga.sum(numeric_only=True)
@@ -283,7 +319,7 @@ st.dataframe(pivot_debit_avlaga.style.format("{:,.2f}"), use_container_width=Tru
 
 
 # 🔶 2. Кредит талд орсон гүйлгээ (Авлага буурсан)
-avlaga_credit = df[df["Кредит\n"] == "120101 - Дансны авлага"].copy()
+avlaga_credit = df[df["Кредит"] == "120101 - Дансны авлага"].copy()
 avlaga_credit["Огноо"] = pd.to_datetime(avlaga_credit["Огноо"], errors='coerce')
 avlaga_credit["Сар"] = avlaga_credit["Огноо"].dt.to_period("M")
 
@@ -307,8 +343,8 @@ emp_receivable_debit = df[df["Дебет"] == "120601 - Ажиллагчдаас
 emp_receivable_debit["Огноо"] = pd.to_datetime(emp_receivable_debit["Огноо"], errors='coerce')
 emp_receivable_debit["Сар"] = emp_receivable_debit["Огноо"].dt.to_period("M")
 
-debit_grouped = emp_receivable_debit.groupby(["Сар", "Кредит\n"])["Дүн"].sum().reset_index()
-pivot_debit_emp = debit_grouped.pivot(index="Кредит\n", columns="Сар", values="Дүн").fillna(0)
+debit_grouped = emp_receivable_debit.groupby(["Сар", "Кредит"])["Дүн"].sum().reset_index()
+pivot_debit_emp = debit_grouped.pivot(index="Кредит", columns="Сар", values="Дүн").fillna(0)
 
 # 👉 Нийт мөр
 total_row_debit = pivot_debit_emp.sum(numeric_only=True)
@@ -320,7 +356,7 @@ st.dataframe(pivot_debit_emp.style.format("{:,.2f}"), use_container_width=True)
 
 
 # 🟥 2. Кредит талд орсон гүйлгээ (авлага буурсан)
-emp_receivable_credit = df[df["Кредит\n"] == "120601 - Ажиллагчдаас авах авлага"].copy()
+emp_receivable_credit = df[df["Кредит"] == "120601 - Ажиллагчдаас авах авлага"].copy()
 emp_receivable_credit["Огноо"] = pd.to_datetime(emp_receivable_credit["Огноо"], errors='coerce')
 emp_receivable_credit["Сар"] = emp_receivable_credit["Огноо"].dt.to_period("M")
 
@@ -344,8 +380,8 @@ debit_df = df[df["Дебет"] == "310101 - Дансны өглөг"].copy()
 debit_df["Огноо"] = pd.to_datetime(debit_df["Огноо"], errors="coerce")
 debit_df["Сар"] = debit_df["Огноо"].dt.to_period("M")
 
-grouped_debit = debit_df.groupby(["Сар", "Кредит\n"])["Дүн"].sum().reset_index()
-pivot_debit = grouped_debit.pivot(index="Кредит\n", columns="Сар", values="Дүн").fillna(0)
+grouped_debit = debit_df.groupby(["Сар", "Кредит"])["Дүн"].sum().reset_index()
+pivot_debit = grouped_debit.pivot(index="Кредит", columns="Сар", values="Дүн").fillna(0)
 
 total_row_debit = pivot_debit.sum(numeric_only=True)
 total_row_debit.name = "Нийт"
@@ -356,7 +392,7 @@ st.dataframe(pivot_debit.style.format("{:,.2f}"), use_container_width=True)
 
 
 # 📌 2. Кредит талд орсон гүйлгээ — өглөг нэмэгдсэн
-credit_df = df[df["Кредит\n"] == "310101 - Дансны өглөг"].copy()
+credit_df = df[df["Кредит"] == "310101 - Дансны өглөг"].copy()
 credit_df["Огноо"] = pd.to_datetime(credit_df["Огноо"], errors="coerce")
 credit_df["Сар"] = credit_df["Огноо"].dt.to_period("M")
 
@@ -379,8 +415,8 @@ debit_df = df[df["Дебет"] == "311301 - НХАТ - ын өглөг"].copy()
 debit_df["Огноо"] = pd.to_datetime(debit_df["Огноо"], errors="coerce")
 debit_df["Сар"] = debit_df["Огноо"].dt.to_period("M")
 
-grouped_debit = debit_df.groupby(["Сар", "Кредит\n"])["Дүн"].sum().reset_index()
-pivot_debit = grouped_debit.pivot(index="Кредит\n", columns="Сар", values="Дүн").fillna(0)
+grouped_debit = debit_df.groupby(["Сар", "Кредит"])["Дүн"].sum().reset_index()
+pivot_debit = grouped_debit.pivot(index="Кредит", columns="Сар", values="Дүн").fillna(0)
 
 total_row_debit = pivot_debit.sum(numeric_only=True)
 total_row_debit.name = "Нийт"
@@ -391,7 +427,7 @@ st.dataframe(pivot_debit.style.format("{:,.2f}"), use_container_width=True)
 
 
 # 📌 2. Кредит талд орсон гүйлгээ — өглөг нэмэгдсэн
-credit_df = df[df["Кредит\n"] == "311301 - НХАТ - ын өглөг"].copy()
+credit_df = df[df["Кредит"] == "311301 - НХАТ - ын өглөг"].copy()
 credit_df["Огноо"] = pd.to_datetime(credit_df["Огноо"], errors="coerce")
 credit_df["Сар"] = credit_df["Огноо"].dt.to_period("M")
 
@@ -414,8 +450,8 @@ debit_df = df[df["Дебет"] == "340104 - Бусад урт хугацаат �
 debit_df["Огноо"] = pd.to_datetime(debit_df["Огноо"], errors="coerce")
 debit_df["Сар"] = debit_df["Огноо"].dt.to_period("M")
 
-grouped_debit = debit_df.groupby(["Сар", "Кредит\n"])["Дүн"].sum().reset_index()
-pivot_debit = grouped_debit.pivot(index="Кредит\n", columns="Сар", values="Дүн").fillna(0)
+grouped_debit = debit_df.groupby(["Сар", "Кредит"])["Дүн"].sum().reset_index()
+pivot_debit = grouped_debit.pivot(index="Кредит", columns="Сар", values="Дүн").fillna(0)
 
 total_row_debit = pivot_debit.sum(numeric_only=True)
 total_row_debit.name = "Нийт"
@@ -426,7 +462,7 @@ st.dataframe(pivot_debit.style.format("{:,.2f}"), use_container_width=True)
 
 
 # 📌 2. Кредит талд орсон гүйлгээ (өр үүссэн дүн)
-credit_df = df[df["Кредит\n"] == "340104 - Бусад урт хугацаат өр төлбөр"].copy()
+credit_df = df[df["Кредит"] == "340104 - Бусад урт хугацаат өр төлбөр"].copy()
 credit_df["Огноо"] = pd.to_datetime(credit_df["Огноо"], errors="coerce")
 credit_df["Сар"] = credit_df["Огноо"].dt.to_period("M")
 
