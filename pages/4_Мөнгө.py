@@ -86,6 +86,72 @@ else:
     
     
     
+# ...existing code...
+
+# 11-р эхэлсэн харилцахын Кредит талын мөрүүдийг шүүх
+df_credit = df[df["Кредит"].astype(str).str.startswith("11")]
+
+# Кредит талын харилцахаас 11-р эхэлсэн Дебет талын гүйлгээг хасна
+df_credit = df_credit[~df_credit["Дебет"].astype(str).str.startswith("11")]
+
+# Кредит талын харилцах болон Дебет талын дансаар бүлэглэж, Дүн баганын нийлбэрийг авах
+if "Кредит" in df_credit.columns and "Дебет" in df_credit.columns and "Дүн" in df_credit.columns:
+    grouped_credit = (
+        df_credit
+        .groupby(["Кредит", "Дебет"])["Дүн"]
+        .sum()
+        .reset_index()
+    )
+    # Хөл дүн нэмэх
+    total_row_credit = pd.DataFrame([{
+        "Кредит": "Нийт",
+        "Дебет": "",
+        "Дүн": grouped_credit["Дүн"].sum()
+    }])
+    grouped_credit_with_total = pd.concat([grouped_credit, total_row_credit], ignore_index=True)
+
+    st.subheader("11-р эхэлсэн харилцахын Кредит тал (11-р эхэлсэн Дебетийг хассан), харгалзах Дебет талын нийлбэр")
+    st.dataframe(
+        grouped_credit_with_total.style.format({"Дүн": "{:,.0f}"}),
+        use_container_width=True
+    )
+else:
+    st.warning("Кредит, Дебет эсвэл Дүн багана олдсонгүй. Файлын бүтэц шалгана уу.")
+    
+    
+# ...existing code...
+
+# 11-р эхэлсэн бүх харилцах дансыг нэг бүлэг ("11-р эхэлсэн харилцах") болгож, харьцсан дебет дансыг гаргах
+df_credit = df[df["Кредит"].astype(str).str.startswith("11")]
+
+# Кредит талын харилцахаас 11-р эхэлсэн Дебет талын гүйлгээг хасна
+df_credit = df_credit[~df_credit["Дебет"].astype(str).str.startswith("11")]
+
+if "Кредит" in df_credit.columns and "Дебет" in df_credit.columns and "Дүн" in df_credit.columns:
+    df_credit["Кредит бүлэг"] = "11-р эхэлсэн харилцах"
+    grouped_credit = (
+        df_credit
+        .groupby(["Кредит бүлэг", "Дебет"])["Дүн"]
+        .sum()
+        .reset_index()
+    )
+    # Хөл дүн нэмэх
+    total_row_credit = pd.DataFrame([{
+        "Кредит бүлэг": "11-р эхэлсэн харилцах",
+        "Дебет": "Нийт",
+        "Дүн": grouped_credit["Дүн"].sum()
+    }])
+    grouped_credit_with_total = pd.concat([grouped_credit, total_row_credit], ignore_index=True)
+
+    st.subheader("11-р эхэлсэн бүх харилцах дансыг нэг бүлэг болгож, харьцсан дебет дансны нийлбэр")
+    st.dataframe(
+        grouped_credit_with_total.style.format({"Дүн": "{:,.0f}"}),
+        use_container_width=True
+    )
+else:
+    st.warning("Кредит, Дебет эсвэл Дүн багана олдсонгүй. Файлын бүтэц шалгана уу.")
+    
+    
 import pandas as pd
 from pathlib import Path
 import streamlit as st

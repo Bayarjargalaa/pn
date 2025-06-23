@@ -35,6 +35,57 @@ st.dataframe(tatan_avalt_grouped.style.format({"Орлого тоо": "{:,.2f}",
 
 
 
+# 'Татан авалт' болон 'Худалдан авалт'-тай мөрүүдийг шүүх
+tatan_hudaldan = df_transaction[
+    df_transaction['Баримтын төрөл'].isin(['Татан авалт', 'Худалдан авалт', 'Бараа материалын орлого'])
+]
+tatan_hudaldan_grouped = tatan_hudaldan.groupby('Байршил')[['Орлого тоо', 'Орлого дүн']].sum().reset_index()
+
+# Хөл дүн нэмэх
+total_row = pd.DataFrame([{
+    "Байршил": "Нийт",
+    "Орлого тоо": tatan_hudaldan_grouped["Орлого тоо"].sum(),
+    "Орлого дүн": tatan_hudaldan_grouped["Орлого дүн"].sum()
+}])
+tatan_hudaldan_with_total = pd.concat([tatan_hudaldan_grouped, total_row], ignore_index=True)
+
+# st.subheader("Барааны татан авалт болон худалдан авалт, Бараа материалын орлогын нийт тоо ширхэг, өртөг дүн (хөл дүнтэй)")
+# st.dataframe(
+#     tatan_hudaldan_with_total.style.format({"Орлого тоо": "{:,.2f}", "Орлого дүн": "{:,.2f}"}),
+#     use_container_width=True
+# )
+
+
+# 'Татан авалт', 'Худалдан авалт', 'Бараа материалын орлого'-той мөрүүдийг шүүх
+tatan_hudaldan = df_transaction[
+    df_transaction['Баримтын төрөл'].isin(['Татан авалт', 'Худалдан авалт', 'Бараа материалын орлого'])
+]
+
+# "Бараа материалын орлого" баримтын төрөлтэй мөрүүдээс "Гүйлгээний утга" багана нь "Бараа материалын төрөл нэгтгэл" биш мөрүүдийг үлдээх
+mask = ~(
+    (tatan_hudaldan['Баримтын төрөл'] == 'Бараа материалын орлого') &
+    (tatan_hudaldan['Гүйлгээний утга'] == 'Бараа материалын төрөл нэгтгэл')
+)
+tatan_hudaldan = tatan_hudaldan[mask]
+
+tatan_hudaldan_grouped = tatan_hudaldan.groupby('Байршил')[['Орлого тоо', 'Орлого дүн']].sum().reset_index()
+
+# Хөл дүн нэмэх
+total_row = pd.DataFrame([{
+    "Байршил": "Нийт",
+    "Орлого тоо": tatan_hudaldan_grouped["Орлого тоо"].sum(),
+    "Орлого дүн": tatan_hudaldan_grouped["Орлого дүн"].sum()
+}])
+tatan_hudaldan_with_total = pd.concat([tatan_hudaldan_grouped, total_row], ignore_index=True)
+
+st.subheader("Барааны татан авалт, худалдан авалт, Бараа материалын орлогын нийт тоо ширхэг, өртөг дүн (хөл дүнтэй, нэгтгэлийн мөр хассан)")
+st.dataframe(
+    tatan_hudaldan_with_total.style.format({"Орлого тоо": "{:,.2f}", "Орлого дүн": "{:,.2f}"}),
+    use_container_width=True
+)
+
+
+
 
 # Орлогын тоо > 0 буюу агуулахад орсон гүйлгээнүүдийг авна
 outgoing_df = df_transaction[df_transaction["Орлого тоо"] > 0].copy()
@@ -60,6 +111,47 @@ agg_summary = outgoing_df.groupby(["Байршил", "Баримтын төрө�
 # Харуулах
 st.subheader("🏷️ Агуулах тус бүрээс гарсан баримтын төрлүүд")
 st.dataframe(agg_summary.style.format({"Зарлага тоо": "{:2,.2f}"}), use_container_width=True)
+
+
+
+# Зарлагын тоо > 0 буюу агуулахаас гарсан гүйлгээнүүдийг авна
+outgoing_df = df_transaction[df_transaction["Зарлага тоо"] > 0].copy()
+
+# "Бараа материал зарлага" баримтын төрөлтэй мөрүүдээс "Гүйлгээний утга" багана нь "Бараа материалын төрөл нэгтгэл" биш мөрүүдийг үлдээх
+mask = ~(
+    (outgoing_df["Баримтын төрөл"] == "Бараа материал зарлага") &
+    (outgoing_df["Гүйлгээний утга"] == "Бараа материалын төрөл нэгтгэл")
+)
+outgoing_df = outgoing_df[mask]
+
+# Баримтын төрөл filter
+barimt_types = outgoing_df["Баримтын төрөл"].unique().tolist()
+default_types = [
+    "Бараа материал борлуулалт",
+    "Бараа материал зарлага",
+    "Дэлгүүрийн борлуулалт",
+    "Худалдан авалтын буцаалт",
+    "Бараа материалын актлалт",
+    "Дэлгүүрийн падааны борлуулалт"
+]
+default_types = [t for t in default_types if t in barimt_types]
+selected_types = st.multiselect("Баримтын төрөл сонгох", barimt_types, default=default_types)
+filtered = outgoing_df[outgoing_df["Баримтын төрөл"].isin(selected_types)]
+
+# Баримтын төрөл ба агуулах (байршил) багануудаар бүлэглэж, дүнг нэгтгэх
+agg_summary = filtered.groupby([ "Баримтын төрөл"])["Зарлага тоо"].sum().reset_index()
+
+# Хөл дүн нэмэх
+total_row = pd.DataFrame([{
+    
+    "Баримтын төрөл": "Нийт",
+    "Зарлага тоо": agg_summary["Зарлага тоо"].sum()
+}])
+agg_summary_with_total = pd.concat([agg_summary, total_row], ignore_index=True)
+
+# Харуулах
+st.subheader("🏷️ Агуулах тус бүрээс гарсан баримтын төрлүүд (шүүлтүүртэй, хөл дүнтэй)")
+st.dataframe(agg_summary_with_total.style.format({"Зарлага тоо": "{:,.2f}"}), use_container_width=True)
 
 
 
