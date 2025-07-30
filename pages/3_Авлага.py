@@ -310,3 +310,15 @@ if "Баримтын төрөл" in df_barimt.columns and "Кредит -₮" in
     )
 else:
     st.warning("Баримтын төрөл эсвэл Кредит -₮ багана олдсонгүй.")
+    
+    
+# Файлын зам
+BASE_DIR = Path(__file__).resolve().parent
+file_path = BASE_DIR.parent / "data" / "Авлага баримтын төрлөөр.xlsx"
+
+# Excel файл унших
+df_avlaga_type = pd.read_excel(file_path)
+
+# Хүснэгтээр харуулах
+st.subheader("Авлага баримтын төрлөөр.xlsx файл")
+st.dataframe(df_avlaga_type, use_container_width=True)

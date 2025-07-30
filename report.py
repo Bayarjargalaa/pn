@@ -9,7 +9,7 @@ import streamlit as st
 BASE_DIR = Path(__file__).resolve().parent
 
 # 📌 data хавтас дахь файлын зам
-file_path = BASE_DIR.parent / 'PN'/ "data" / "ЕЖ.xlsx"
+file_path = BASE_DIR.parent / 'PN Тооцоо'/ "data" / "ЕЖ.xlsx"
 print(f"Файл байрлах зам: {file_path}")
 
 st.set_page_config(page_title="Сар бүрийн ашиг алдагдлын тайлан", layout="centered")
@@ -155,7 +155,29 @@ st.dataframe(merged_rows.style.format("{:,.2f}"), use_container_width=True)
 st.subheader("Сар бүрийн зардлын тайлан (70, 71, 87, 88, 91)")
 st.dataframe(rows_all_expense.style.format("{:,.2f}"), use_container_width=True)
 
+# ...existing code...
 
+# Сар бүрийн зардлын тайлан (70, 71, 87, 88, 91) багана болон мөрийн нийлбэртэй харуулах
+
+# rows_all_expense: мөр - данс, багана - сар
+rows_all_expense_with_total = rows_all_expense.copy()
+
+# Мөрийн нийлбэр (данс бүрийн нийт зардал)
+rows_all_expense_with_total["Мөрийн хөл дүн"] = rows_all_expense_with_total.sum(axis=1)
+
+# Баганын нийлбэр (сар бүрийн нийт зардал)
+col_total = pd.DataFrame(rows_all_expense_with_total.sum(axis=0)).T
+col_total.index = ["Баганын хөл дүн"]
+
+# Хэрвээ "Мөрийн хөл дүн" багана баганын нийлбэрт байхгүй бол 0 гэж үзнэ
+if "Мөрийн хөл дүн" not in col_total.columns:
+    col_total["Мөрийн хөл дүн"] = col_total.sum(axis=1).values[0]
+
+# Хөл дүнг нэмэх
+rows_all_expense_with_total = pd.concat([rows_all_expense_with_total, col_total], axis=0)
+
+st.subheader("Сар бүрийн зардлын тайлан (70, 71, 87, 88, 91) — багана болон мөрийн нийлбэртэй")
+st.dataframe(rows_all_expense_with_total.style.format("{:,.2f}"), use_container_width=True)
 
 # selected_month = st.selectbox("Сар сонгох:", numeric_cols)
 # # 📌 Сонгосон сарын мэдээллийг харуулах

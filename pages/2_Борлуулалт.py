@@ -74,6 +74,26 @@ else:
     st.warning("Харьцсан данс эсвэл Нийт багана олдсонгүй.")
 
 
+# "Харьцсан данс" баганаар бүлэглэж "Нийт" баганын дүнг гаргах
+if "Дебет данс" in df.columns and "Дебет - ₮" in df.columns:
+    # Зөвхөн 610101 - Борлуулсан бүтээгдэхүүний өртөг дансыг шүүх
+    filtered_df = df[df["Дебет данс"].astype(str) == "610101"]
+    grouped = filtered_df.groupby("Дебет данс")["Дебет - ₮"].sum().reset_index()
+    grouped["Дебет данс"] = grouped["Дебет данс"].astype(str)
+    accounts_df["Код"] = accounts_df["Код"].astype(str)
+    grouped = grouped.merge(accounts_df[["Код", "Нэр"]], left_on="Дебет данс", right_on="Код", how="left")
+    grouped["Данс"] = grouped["Дебет данс"] + " - " + grouped["Нэр"].fillna("")
+    grouped = grouped[["Данс", "Дебет - ₮"]]
+    # Хөл дүн нэмэх
+    total_row = pd.DataFrame([{
+        "Данс": "Дебет - ₮",
+        "Дебет - ₮": grouped["Дебет - ₮"].sum()
+    }])
+    grouped_with_total = pd.concat([grouped, total_row], ignore_index=True)
+    # st.subheader("📊 610101 - Борлуулсан бүтээгдэхүүний өртөг дансны дебет талын нийт")
+    # st.dataframe(grouped_with_total.style.format({"Дебет - ₮": "{:,.2f}"}), use_container_width=True)
+else:
+    st.warning("Харьцсан данс эсвэл Нийт багана олдсонгүй.")
 
 
 
