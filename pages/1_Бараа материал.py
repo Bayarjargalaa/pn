@@ -14,9 +14,17 @@ file_path_c1 = BASE_DIR.parent / "data" / "PN тооцоо.xlsx"
 # ✅ Excel файл унших
 df_c1 = pd.read_excel(file_path_c1, sheet_name='Барааны С1 2023.03.17',)
 
+# Хөл дүн тооцоолох (тоон багануудын нийлбэр)
+numeric_cols = df_c1.select_dtypes(include="number").columns
+total_row = pd.DataFrame([{
+    **{col: df_c1[col].sum() for col in numeric_cols},
+    **{col: "Нийт дүн" if col == "Нэр" else "" for col in df_c1.columns if col not in numeric_cols}
+}])
+df_c1_with_total = pd.concat([df_c1, total_row], ignore_index=True)
+
 # 📊 Хүснэгтээр харуулах
-st.subheader("Барааны эхний үлдэгдэл 2023.03.17-ны байдлаар")
-st.dataframe(df_c1, use_container_width=True)
+st.subheader("Барааны эхний үлдэгдэл 2023.03.17-ны байдлаар (хөл дүнтэй)")
+st.dataframe(df_c1_with_total, use_container_width=True)
 
 
 
@@ -86,6 +94,179 @@ st.dataframe(
 
 
 
+# 'Татан авалт', 'Худалдан авалт', 'Бараа материалын орлого'-той мөрүүдийг шүүх
+tatan_hudaldan = df_transaction[
+    df_transaction['Баримтын төрөл'].isin(['Татан авалт', 'Худалдан авалт', 'Бараа материалын орлого'])
+]
+
+# "Бараа материалын орлого" баримтын төрөлтэй мөрүүдээс "Гүйлгээний утга" багана нь "Бараа материалын төрөл нэгтгэл" биш мөрүүдийг үлдээх
+mask = ~(
+    (tatan_hudaldan['Баримтын төрөл'] == 'Бараа материалын орлого') &
+    (tatan_hudaldan['Гүйлгээний утга'] == 'Бараа материалын төрөл нэгтгэл')
+)
+tatan_hudaldan = tatan_hudaldan[mask]
+
+# Баримтын төрөл шүүлтүүр
+barimt_types = tatan_hudaldan["Баримтын төрөл"].unique().tolist()
+selected_types = st.multiselect(
+    "Баримтын төрөл сонгох", barimt_types, default=barimt_types
+)
+filtered = tatan_hudaldan[tatan_hudaldan["Баримтын төрөл"].isin(selected_types)]
+
+# Байршил, баримтын төрлөөр бүлэглэж, нийт орлого тоо, дүнг гаргах
+grouped = filtered.groupby(['Байршил', 'Баримтын төрөл'])[['Орлого тоо', 'Орлого дүн']].sum().reset_index()
+
+# Хөл дүн нэмэх
+total_row = pd.DataFrame([{
+    "Байршил": "Нийт",
+    "Баримтын төрөл": "",
+    "Орлого тоо": grouped["Орлого тоо"].sum(),
+    "Орлого дүн": grouped["Орлого дүн"].sum()
+}])
+grouped_with_total = pd.concat([grouped, total_row], ignore_index=True)
+
+st.subheader("Барааны татан авалт, худалдан авалт, Бараа материалын орлогын нийт тоо ширхэг, өртөг дүн (баримтын төрлөөр шүүж харуулах, хөл дүнтэй)")
+st.dataframe(
+    grouped_with_total.style.format({"Орлого тоо": "{:,.2f}", "Орлого дүн": "{:,.2f}"}),
+    use_container_width=True
+)
+
+
+
+
+
+outgoing_df = df_transaction[df_transaction["Зарлага тоо"] > 0].copy()
+
+# "Бараа материал зарлага" баримтын төрөлтэй мөрүүдээс "Гүйлгээний утга" багана нь "Бараа материалын төрөл нэгтгэл" биш мөрүүдийг үлдээх
+mask = ~(
+    (outgoing_df["Баримтын төрөл"] == "Бараа материал зарлага") &
+    (outgoing_df["Гүйлгээний утга"] == "Бараа материалын төрөл нэгтгэл")
+)
+outgoing_df = outgoing_df[mask]
+
+# Баримтын төрөл filter
+barimt_types = outgoing_df["Баримтын төрөл"].unique().tolist()
+default_types = [
+    "Бараа материал борлуулалт",
+    "Бараа материал зарлага",
+    "Дэлгүүрийн борлуулалт",
+    "Худалдан авалтын буцаалт",
+    "Бараа материалын актлалт",
+    "Дэлгүүрийн падааны борлуулалт"
+]
+default_types = [t for t in default_types if t in barimt_types]
+selected_types = st.multiselect("Баримтын төрөл сонгох", barimt_types, default=default_types)
+filtered = outgoing_df[outgoing_df["Баримтын төрөл"].isin(selected_types)]
+
+# Баримтын төрөл ба агуулах (байршил) багануудаар бүлэглэж, дүнг нэгтгэх
+agg_summary = filtered.groupby(["Баримтын төрөл"])[["Зарлага тоо", "Зарлага дүн"]].sum().reset_index()
+
+# Хөл дүн нэмэх
+total_row = pd.DataFrame([{
+    "Баримтын төрөл": "Нийт",
+    "Зарлага тоо": agg_summary["Зарлага тоо"].sum(),
+    "Зарлага дүн": agg_summary["Зарлага дүн"].sum()
+}])
+agg_summary_with_total = pd.concat([agg_summary, total_row], ignore_index=True)
+
+# Харуулах
+st.subheader("🏷️ Агуулах тус бүрээс гарсан баримтын төрлүүд (шүүлтүүртэй, хөл дүнтэй)")
+st.dataframe(
+    agg_summary_with_total.style.format({"Зарлага тоо": "{:,.2f}", "Зарлага дүн": "{:,.2f}"}),
+    use_container_width=True
+)
+
+
+
+
+
+# ...existing code...
+
+# --- Байршил тус бүрийн барааны эцсийн үлдэгдэл (тооллогын орлого, зарлага оруулахгүй) ---
+
+# 1. Эхний үлдэгдэл (агуулахын) - Байршил тус бүрээр (зөвхөн "Агуулах", "PN Store")
+df_ankh = df_c1.rename(columns={"Нэр": "Барааны нэр"})[["Барааны нэр", "Агуулах", "PN Store"]].copy()
+ankh_warehouse = df_ankh[["Барааны нэр", "Агуулах"]].copy().rename(columns={"Агуулах": "Эхний үлдэгдэл"})
+ankh_warehouse["Байршил"] = "Агуулах"
+ankh_store = df_ankh[["Барааны нэр", "PN Store"]].copy().rename(columns={"PN Store": "Эхний үлдэгдэл"})
+ankh_store["Байршил"] = "PN Store"
+df_ankh_all = pd.concat([ankh_warehouse, ankh_store], ignore_index=True)
+
+# 2. Гүйлгээний бүх байршил, барааны нэрийн хослолыг олно
+all_locations = df_transaction[["Байршил", "Барааны нэр"]].drop_duplicates()
+# Эхний үлдэгдэлтэй байршлуудыг нэмнэ
+all_locations = pd.concat([
+    all_locations,
+    df_ankh_all[["Байршил", "Барааны нэр"]]
+]).drop_duplicates().reset_index(drop=True)
+
+# 3. Орлого, зарлагыг тооцоолно (тооллогын орлого/зарлага оруулахгүй)
+orl = df_transaction[
+    (df_transaction["Орлого тоо"] > 0) &
+    (df_transaction["Баримтын төрөл"] != "Тооллогын орлого")
+].groupby(["Байршил", "Барааны нэр"])["Орлого тоо"].sum().reset_index()
+
+zar = df_transaction[
+    (df_transaction["Зарлага тоо"] > 0) &
+    (df_transaction["Баримтын төрөл"] != "Тооллогын зарлага")
+].groupby(["Байршил", "Барааны нэр"])["Зарлага тоо"].sum().reset_index()
+
+# 4. Бүх байршил, барааны нэрийн хослол дээр эхний үлдэгдэл, орлого, зарлага-г нэгтгэнэ
+df_balance = all_locations.merge(df_ankh_all, on=["Байршил", "Барааны нэр"], how="left")
+df_balance = df_balance.merge(orl, on=["Байршил", "Барааны нэр"], how="left")
+df_balance = df_balance.merge(zar, on=["Байршил", "Барааны нэр"], how="left")
+df_balance = df_balance.fillna(0)
+
+# 5. Эцсийн үлдэгдэл тооцоолох
+df_balance["Эцсийн үлдэгдэл"] = (
+    df_balance["Эхний үлдэгдэл"] + df_balance["Орлого тоо"] - df_balance["Зарлага тоо"]
+)
+
+# 6. Байршил, барааны нэрээр бүлэглэж, дүнг нэгтгэнэ (замбараагүй давхардлыг цэгцэлнэ)
+df_balance_grouped = (
+    df_balance.groupby(["Байршил", "Барааны нэр"], as_index=False)["Эцсийн үлдэгдэл"]
+    .sum()
+    .sort_values(["Байршил", "Барааны нэр"])
+    .reset_index(drop=True)
+)
+
+# 7. Байршил PN Store, Агуулах, Баталгаат агуулах, Бямбацогт, Оффис-ыг сонгож, үлдэгдэл 0-с ялгаатайг шүүнэ
+selected_locations = ["PN Store", "Агуулах", "Баталгаат агуулах", "Бямбацогт", "Оффис"]
+df_balance_filtered = df_balance_grouped[
+    (df_balance_grouped["Байршил"].isin(selected_locations)) &
+    (df_balance_grouped["Эцсийн үлдэгдэл"] != 0)
+].reset_index(drop=True)
+
+# st.subheader("📦Эцсийн үлдэгдэл (PN Store, Агуулах, Баталгаат агуулах, Бямбацогт, Оффис) - 0-с ялгаатай үлдэгдэлтэй")
+# st.dataframe(df_balance_filtered, use_container_width=True)
+
+
+
+
+# ...existing code...
+
+# Pivot: Агуулах (Байршил) багана, Барааны нэр мөр, Эцсийн үлдэгдэл утга
+pivot_df = df_balance_filtered.pivot_table(
+    index="Барааны нэр",
+    columns="Байршил",
+    values="Эцсийн үлдэгдэл",
+    fill_value=0
+).reset_index()
+
+# Хөл дүн тооцоолох
+total_row = pd.DataFrame([{
+    "Барааны нэр": "Нийт",
+    **{col: pivot_df[col].sum() for col in pivot_df.columns if col != "Барааны нэр"}
+}])
+pivot_with_total = pd.concat([pivot_df, total_row], ignore_index=True)
+
+st.subheader("📦Эцсийн үлдэгдэл (pivot, хөл дүнтэй) — Барааны нэр мөр, агуулах багана")
+st.dataframe(pivot_with_total, use_container_width=True)
+
+# ...existing
+
+
+
 
 # Орлогын тоо > 0 буюу агуулахад орсон гүйлгээнүүдийг авна
 outgoing_df = df_transaction[df_transaction["Орлого тоо"] > 0].copy()
@@ -114,44 +295,7 @@ st.dataframe(agg_summary.style.format({"Зарлага тоо": "{:2,.2f}"}), us
 
 
 
-# Зарлагын тоо > 0 буюу агуулахаас гарсан гүйлгээнүүдийг авна
-outgoing_df = df_transaction[df_transaction["Зарлага тоо"] > 0].copy()
 
-# "Бараа материал зарлага" баримтын төрөлтэй мөрүүдээс "Гүйлгээний утга" багана нь "Бараа материалын төрөл нэгтгэл" биш мөрүүдийг үлдээх
-mask = ~(
-    (outgoing_df["Баримтын төрөл"] == "Бараа материал зарлага") &
-    (outgoing_df["Гүйлгээний утга"] == "Бараа материалын төрөл нэгтгэл")
-)
-outgoing_df = outgoing_df[mask]
-
-# Баримтын төрөл filter
-barimt_types = outgoing_df["Баримтын төрөл"].unique().tolist()
-default_types = [
-    "Бараа материал борлуулалт",
-    "Бараа материал зарлага",
-    "Дэлгүүрийн борлуулалт",
-    "Худалдан авалтын буцаалт",
-    "Бараа материалын актлалт",
-    "Дэлгүүрийн падааны борлуулалт"
-]
-default_types = [t for t in default_types if t in barimt_types]
-selected_types = st.multiselect("Баримтын төрөл сонгох", barimt_types, default=default_types)
-filtered = outgoing_df[outgoing_df["Баримтын төрөл"].isin(selected_types)]
-
-# Баримтын төрөл ба агуулах (байршил) багануудаар бүлэглэж, дүнг нэгтгэх
-agg_summary = filtered.groupby([ "Баримтын төрөл"])["Зарлага тоо"].sum().reset_index()
-
-# Хөл дүн нэмэх
-total_row = pd.DataFrame([{
-    
-    "Баримтын төрөл": "Нийт",
-    "Зарлага тоо": agg_summary["Зарлага тоо"].sum()
-}])
-agg_summary_with_total = pd.concat([agg_summary, total_row], ignore_index=True)
-
-# Харуулах
-st.subheader("🏷️ Агуулах тус бүрээс гарсан баримтын төрлүүд (шүүлтүүртэй, хөл дүнтэй)")
-st.dataframe(agg_summary_with_total.style.format({"Зарлага тоо": "{:,.2f}"}), use_container_width=True)
 
 
 
@@ -219,8 +363,8 @@ pivot_df = movement_combined.pivot_table(
 # Дизайн сайжруулалт
 pivot_df.columns = [' | '.join(col).strip() for col in pivot_df.columns.values]
 pivot_df = pivot_df.reset_index()
-st.subheader("📊 Агуулах хоорондын Орлого/Зарлага, Баримтын төрлөөр")
-st.dataframe(pivot_df, use_container_width=True)
+# st.subheader("📊 Агуулах хоорондын Орлого/Зарлага, Баримтын төрлөөр")
+# st.dataframe(pivot_df, use_container_width=True)
 
 
 
@@ -241,9 +385,10 @@ total_row = pd.DataFrame([["Нийт", ""] + totals.tolist()], columns=["Агу�
 # 4. Хөл дүнг датафреймд нэмж нэгтгэх
 pivot_with_total = pd.concat([pivot_df, total_row], ignore_index=True)
 
-# 5. Хүснэгтийг харуулах
-st.subheader("📦 Агуулах + Барааны нэр + Хөл дүн")
-st.dataframe(pivot_with_total, use_container_width=True)
+# 5. Хүснэгтийг харуулах (мянгачилж форматлах)
+format_dict = {col: "{:,.0f}" for col in numeric_cols}
+st.subheader("📦 Агуулах хоорондын Орлого/Зарлага, Баримтын төрлөөр + Хөл дүн")
+st.dataframe(pivot_with_total.style.format(format_dict), use_container_width=True)
 
 
 
@@ -268,60 +413,7 @@ st.dataframe(tatan_avalt_grouped.style.format({"Зарлага тоо": "{:,.2f}
 
 
 
-# ...existing code...
 
-# --- Байршил тус бүрийн барааны эцсийн үлдэгдэл (тооллогын орлого, зарлага оруулахгүй) ---
-
-# 1. Эхний үлдэгдэл (агуулахын) - Байршил тус бүрээр (зөвхөн "Агуулах", "PN Store")
-df_ankh = df_c1.rename(columns={"Нэр": "Барааны нэр"})[["Барааны нэр", "Агуулах", "PN Store"]].copy()
-ankh_warehouse = df_ankh[["Барааны нэр", "Агуулах"]].copy().rename(columns={"Агуулах": "Эхний үлдэгдэл"})
-ankh_warehouse["Байршил"] = "Агуулах"
-ankh_store = df_ankh[["Барааны нэр", "PN Store"]].copy().rename(columns={"PN Store": "Эхний үлдэгдэл"})
-ankh_store["Байршил"] = "PN Store"
-df_ankh_all = pd.concat([ankh_warehouse, ankh_store], ignore_index=True)
-
-# 2. Гүйлгээний бүх байршил, барааны нэрийн хослолыг олно
-all_locations = df_transaction[["Байршил", "Барааны нэр"]].drop_duplicates()
-# Эхний үлдэгдэлтэй байршлуудыг нэмнэ
-all_locations = pd.concat([
-    all_locations,
-    df_ankh_all[["Байршил", "Барааны нэр"]]
-]).drop_duplicates().reset_index(drop=True)
-
-# 3. Орлого, зарлагыг тооцоолно (тооллогын орлого/зарлага оруулахгүй)
-orl = df_transaction[
-    (df_transaction["Орлого тоо"] > 0) &
-    (df_transaction["Баримтын төрөл"] != "Тооллогын орлого")
-].groupby(["Байршил", "Барааны нэр"])["Орлого тоо"].sum().reset_index()
-
-zar = df_transaction[
-    (df_transaction["Зарлага тоо"] > 0) &
-    (df_transaction["Баримтын төрөл"] != "Тооллогын зарлага")
-].groupby(["Байршил", "Барааны нэр"])["Зарлага тоо"].sum().reset_index()
-
-# 4. Бүх байршил, барааны нэрийн хослол дээр эхний үлдэгдэл, орлого, зарлага-г нэгтгэнэ
-df_balance = all_locations.merge(df_ankh_all, on=["Байршил", "Барааны нэр"], how="left")
-df_balance = df_balance.merge(orl, on=["Байршил", "Барааны нэр"], how="left")
-df_balance = df_balance.merge(zar, on=["Байршил", "Барааны нэр"], how="left")
-df_balance = df_balance.fillna(0)
-
-# 5. Эцсийн үлдэгдэл тооцоолох
-df_balance["Эцсийн үлдэгдэл"] = (
-    df_balance["Эхний үлдэгдэл"] + df_balance["Орлого тоо"] - df_balance["Зарлага тоо"]
-)
-
-# 6. Байршил, барааны нэрээр бүлэглэж, дүнг нэгтгэнэ (замбараагүй давхардлыг цэгцэлнэ)
-df_balance_grouped = (
-    df_balance.groupby(["Байршил", "Барааны нэр"], as_index=False)["Эцсийн үлдэгдэл"]
-    .sum()
-    .sort_values(["Байршил", "Барааны нэр"])
-    .reset_index(drop=True)
-)
-
-# 7. Харуулах
-st.subheader("📦Эцсийн үлдэгдэл  Байршил, бараагаар бүлэглэсэн  (тооллогын орлого/зарлага оруулахгүй)")
-st.dataframe(df_balance_grouped, use_container_width=True)
-# ...existing code...
 
 
 
@@ -435,22 +527,121 @@ bm_zarlaga = df_transaction[
     (df_transaction["Гүйлгээний утга"] != "Бараа материалын төрөл нэгтгэл")
 ]
 
-# 2. Байршил, гүйлгээний утга, барааны нэрээр бүлэглэж нийт зарлагыг гаргана
+# 2. Байршил, гүйлгээний утга, барааны нэрээр бүлэглэж нийт зарлага тоо, дүнг гаргана
 bm_zarlaga_grouped = bm_zarlaga.groupby(
     ["Байршил", "Гүйлгээний утга", "Барааны нэр"]
-)["Зарлага тоо"].sum().reset_index()
+)[["Зарлага тоо", "Зарлага дүн"]].sum().reset_index()
 
 # 3. Нийт дүнг тооцоолох
 total_row = pd.DataFrame([{
     "Байршил": "Нийт",
     "Гүйлгээний утга": "",
     "Барааны нэр": "",
-    "Зарлага тоо": bm_zarlaga_grouped["Зарлага тоо"].sum()
+    "Зарлага тоо": bm_zarlaga_grouped["Зарлага тоо"].sum(),
+    "Зарлага дүн": bm_zarlaga_grouped["Зарлага дүн"].sum(),
+    "Баримтын огноо": ""
 }])
 
 bm_zarlaga_with_total = pd.concat([bm_zarlaga_grouped, total_row], ignore_index=True)
 
 # 4. Харуулах
 st.subheader("📦 Бүх байршлын 'Бараа материал зарлага' (нэгтгэлгүй) төрлийн нийт зарлага - гүйлгээний утгаар бүлэглэсэн")
-st.dataframe(bm_zarlaga_with_total, use_container_width=True)
-# ...existing code...
+st.dataframe(
+    bm_zarlaga_with_total.style.format({"Зарлага тоо": "{:,.2f}", "Зарлага дүн": "{:,.2f}"}),
+    use_container_width=True
+)
+
+
+
+
+
+# 1. "Бараа материал зарлага" төрлийн бүх мөрийг авна
+bm_zarlaga = df_transaction[
+    (df_transaction["Баримтын төрөл"] == "Бараа материал зарлага") &
+    (df_transaction["Зарлага тоо"] > 0) &
+    (df_transaction["Гүйлгээний утга"] != "Бараа материалын төрөл нэгтгэл")
+]
+
+# 2. Байршил, гүйлгээний утга, барааны нэр, Багц баганаар бүлэглэж, Баримтын огноог хамгийн эхний огноогоор харуулах
+bm_zarlaga_grouped = bm_zarlaga.groupby(
+    ["Багц", "Байршил", "Гүйлгээний утга", "Барааны нэр", ]
+).agg({
+    "Зарлага тоо": "sum",
+    "Зарлага дүн": "sum",
+    "Баримтын огноо": "min"  # Эсвэл "first" гэж сольж болно
+}).reset_index()
+
+# 3. Нийт дүнг тооцоолох
+total_row = pd.DataFrame([{
+    "Байршил": "Нийт",
+    "Гүйлгээний утга": "",
+    "Барааны нэр": "",
+    "Багц": "",
+    "Зарлага тоо": bm_zarlaga_grouped["Зарлага тоо"].sum(),
+    "Зарлага дүн": bm_zarlaga_grouped["Зарлага дүн"].sum(),
+    "Баримтын огноо": ""
+}])
+
+bm_zarlaga_with_total = pd.concat([bm_zarlaga_grouped, total_row], ignore_index=True)
+
+# 4. Харуулах
+st.subheader("📦 Бүх байршлын 'Бараа материал зарлага' (нэгтгэлгүй) төрлийн нийт зарлага - гүйлгээний утга, багц, огноогоор бүлэглэсэн")
+st.dataframe(
+    bm_zarlaga_with_total.style.format({"Зарлага тоо": "{:,.2f}", "Зарлага дүн": "{:,.2f}"}),
+    use_container_width=True)
+
+
+
+# 1. "Бараа материал зарлага" төрлийн бүх мөрийг авна
+bm_zarlaga = df_transaction[
+    (df_transaction["Баримтын төрөл"] == "Бараа материал зарлага") &
+    (df_transaction["Зарлага тоо"] > 0) &
+    (df_transaction["Гүйлгээний утга"] != "Бараа материалын төрөл нэгтгэл")
+]
+
+# 2. Байршил, гүйлгээний утга, барааны нэрээр бүлэглэж нийт зарлага тоо, дүн, огнооны жагсаалтыг гаргана
+bm_zarlaga_grouped = bm_zarlaga.groupby(
+    ["Байршил", "Гүйлгээний утга", "Барааны нэр"]
+).agg({
+    "Зарлага тоо": "sum",
+    "Зарлага дүн": "sum",
+    "Баримтын огноо": lambda x: ", ".join(sorted(x.astype(str).unique()))
+}).reset_index()
+
+# 3. Нийт дүнг тооцоолох
+total_row = pd.DataFrame([{
+    "Байршил": "Нийт",
+    "Гүйлгээний утга": "",
+    "Барааны нэр": "",
+    "Зарлага тоо": bm_zarlaga_grouped["Зарлага тоо"].sum(),
+    "Зарлага дүн": bm_zarlaga_grouped["Зарлага дүн"].sum(),
+    "Баримтын огноо": ""
+}])
+
+bm_zarlaga_with_total = pd.concat([bm_zarlaga_grouped, total_row], ignore_index=True)
+
+# 4. Харуулах
+st.subheader("📦 Бүх байршлын 'Бараа материал зарлага' (нэгтгэлгүй) төрлийн нийт зарлага - гүйлгээний утгаар, огнооны жагсаалттай")
+st.dataframe(
+    bm_zarlaga_with_total.style.format({"Зарлага тоо": "{:,.2f}", "Зарлага дүн": "{:,.2f}"}),
+    use_container_width=True
+)
+
+
+# 1. "Бараа материал зарлага" төрлийн бүх мөрийг авна
+bm_zarlaga = df_transaction[
+    (df_transaction["Баримтын төрөл"] == "Бараа материал зарлага") &
+    (df_transaction["Зарлага тоо"] > 0) &
+    (df_transaction["Гүйлгээний утга"] != "Бараа материалын төрөл нэгтгэл")
+]
+
+# 2. Баримт тус бүрээр нь, байршил болон баримтын огноогоор эрэмбэлж харуулах
+bm_zarlaga_grouped = bm_zarlaga[[
+    "Байршил", "Баримт", "Баримтын огноо", "Гүйлгээний утга", "Барааны нэр", "Зарлага тоо", "Зарлага дүн"
+]].sort_values(["Байршил", "Баримтын огноо", "Баримт"]).reset_index(drop=True)
+
+st.subheader("📦 'Бараа материал зарлага' баримт тус бүрээр (байршил, огноогоор эрэмбэлсэн)")
+st.dataframe(
+    bm_zarlaga_grouped.style.format({"Зарлага тоо": "{:,.2f}", "Зарлага дүн": "{:,.2f}"}),
+    use_container_width=True
+)

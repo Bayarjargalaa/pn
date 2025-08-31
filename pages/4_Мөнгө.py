@@ -115,10 +115,31 @@ if "Кредит" in df_credit.columns and "Дебет" in df_credit.columns and
         grouped_credit_with_total.style.format({"Дүн": "{:,.0f}"}),
         use_container_width=True
     )
+    
+    # --- Нэмэгдсэн гүйлгээнүүдийг тус бүрээр нь харуулах ---
+    st.subheader("11-р эхэлсэн харилцахын Кредит талын нэмэгдсэн гүйлгээнүүд (баримт тус бүрээр)")
+    detail_cols = ["Кредит", "Дебет", "сар, өдөр", "Дүн"]
+    detail_cols = [col for col in detail_cols if col in df_credit.columns]
+    df_credit_sorted = df_credit[detail_cols].sort_values(["Кредит", "сар, өдөр"])
+
+    # Дүнгийн нийлбэрийг тооцоолох
+    total_row = pd.DataFrame([{
+        "Кредит": "Нийт",
+        "Дебет": "",
+        "сар, өдөр": "",
+        "Дүн": df_credit_sorted["Дүн"].sum()
+    }])
+    df_credit_with_total = pd.concat([df_credit_sorted, total_row], ignore_index=True)
+
+    st.dataframe(
+        df_credit_with_total.style.format({"Дүн": "{:,.0f}"}),
+        use_container_width=True
+    )
 else:
     st.warning("Кредит, Дебет эсвэл Дүн багана олдсонгүй. Файлын бүтэц шалгана уу.")
     
     
+
 # ...existing code...
 
 # 11-р эхэлсэн бүх харилцах дансыг нэг бүлэг ("11-р эхэлсэн харилцах") болгож, харьцсан дебет дансыг гаргах
